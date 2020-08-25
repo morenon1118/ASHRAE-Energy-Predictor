@@ -1,0 +1,180 @@
+\documentclass[]{article}
+\usepackage{lmodern}
+\usepackage{amssymb,amsmath}
+\usepackage{ifxetex,ifluatex}
+\usepackage{fixltx2e} % provides \textsubscript
+\ifnum 0\ifxetex 1\fi\ifluatex 1\fi=0 % if pdftex
+  \usepackage[T1]{fontenc}
+  \usepackage[utf8]{inputenc}
+\else % if luatex or xelatex
+  \ifxetex
+    \usepackage{mathspec}
+  \else
+    \usepackage{fontspec}
+  \fi
+  \defaultfontfeatures{Ligatures=TeX,Scale=MatchLowercase}
+\fi
+% use upquote if available, for straight quotes in verbatim environments
+\IfFileExists{upquote.sty}{\usepackage{upquote}}{}
+% use microtype if available
+\IfFileExists{microtype.sty}{%
+\usepackage{microtype}
+\UseMicrotypeSet[protrusion]{basicmath} % disable protrusion for tt fonts
+}{}
+\usepackage[margin=1in]{geometry}
+\usepackage{hyperref}
+\hypersetup{unicode=true,
+            pdftitle={488 - Energy Predictor Report},
+            pdfauthor={Nick Moreno},
+            pdfborder={0 0 0},
+            breaklinks=true}
+\urlstyle{same}  % don't use monospace font for urls
+\usepackage{graphicx,grffile}
+\makeatletter
+\def\maxwidth{\ifdim\Gin@nat@width>\linewidth\linewidth\else\Gin@nat@width\fi}
+\def\maxheight{\ifdim\Gin@nat@height>\textheight\textheight\else\Gin@nat@height\fi}
+\makeatother
+% Scale images if necessary, so that they will not overflow the page
+% margins by default, and it is still possible to overwrite the defaults
+% using explicit options in \includegraphics[width, height, ...]{}
+\setkeys{Gin}{width=\maxwidth,height=\maxheight,keepaspectratio}
+\setlength{\emergencystretch}{3em}  % prevent overfull lines
+\providecommand{\tightlist}{%
+  \setlength{\itemsep}{0pt}\setlength{\parskip}{0pt}}
+\setcounter{secnumdepth}{0}
+% Redefines (sub)paragraphs to behave more like sections
+\ifx\paragraph\undefined\else
+\let\oldparagraph\paragraph
+\renewcommand{\paragraph}[1]{\oldparagraph{#1}\mbox{}}
+\fi
+\ifx\subparagraph\undefined\else
+\let\oldsubparagraph\subparagraph
+\renewcommand{\subparagraph}[1]{\oldsubparagraph{#1}\mbox{}}
+\fi
+
+%%% Use protect on footnotes to avoid problems with footnotes in titles
+\let\rmarkdownfootnote\footnote%
+\def\footnote{\protect\rmarkdownfootnote}
+
+%%% Change title format to be more compact
+\usepackage{titling}
+
+% Create subtitle command for use in maketitle
+\providecommand{\subtitle}[1]{
+  \posttitle{
+    \begin{center}\large#1\end{center}
+    }
+}
+
+\setlength{\droptitle}{-2em}
+
+  \title{488 - Energy Predictor Report}
+    \pretitle{\vspace{\droptitle}\centering\huge}
+  \posttitle{\par}
+    \author{Nick Moreno}
+    \preauthor{\centering\large\emph}
+  \postauthor{\par}
+      \predate{\centering\large\emph}
+  \postdate{\par}
+    \date{12/10/2019}
+
+
+\begin{document}
+\maketitle
+
+\hypertarget{introduction}{%
+\subsubsection{Introduction}\label{introduction}}
+
+For Kaggle's ``ASHRAE - GREAT ENERGY PREDICTOR III'' data competition,
+our primary task is to develop a model that predicts energy consumption
+of buildings. This competition defines a building's energy consumption
+through four sources - electricity, chilled and hot water, and steam -
+measured by per-hour building meter readings. As we are interested in
+prediction, the plan is to create a generalized additive model to
+predict hourly meter readings for each energy type based on historical
+building specifications and weather patterns. This model will then be
+evaluated using the Root Mean Squared Logarithmic Error.
+
+The dataset we have to train our model consists of 1449 buildings and
+their historical meter readings for an entire year on the hour. It
+additionally gives data concerning the size and age of each building, as
+well as various temperature metrics grouped by 15 building sites. The
+goal is to build a model that helps companies and organizations can
+choose their next locations or investment opportunities based on areas
+that optimize energy saving and cost efficiency.
+
+\hypertarget{methods}{%
+\subsubsection{Methods:}\label{methods}}
+
+While we have introduced our main prediction method of choice, our
+dataset did not come cleaned. Thus, it's also important to note our
+approach to merging our data and dealing with missing values along with
+the details of our GAM model. \#\#\#\# Data Cleaning Basically, actual
+meter readings came separate from our building and weather information.
+In addition, both datasets detailing building and weather information
+included a number of missing values for each variable:
+
+\begin{verbatim}
+##     site_id building_id primary_use square_feet  year_built floor_count 
+##           0           0           0           0         774        1094
+\end{verbatim}
+
+\begin{verbatim}
+##            site_id          timestamp    air_temperature 
+##                  0                  0                 55 
+##     cloud_coverage    dew_temperature  precip_depth_1_hr 
+##              69173                113              50289 
+## sea_level_pressure     wind_direction         wind_speed 
+##              10618               6268                304
+\end{verbatim}
+
+To deal with this, I decided to fill in the missing values using the
+mice() function in R. I utilized the function to create a mean
+matching-based predictive model that imputes values for each missing
+data point.\\
+There are missing values for building year, floor count, and each
+weather metric. Because mice uses a collection of predictors in a
+dataset, it made more sense to build the values before merging the
+dataset, so only weather variables are being used to predict weather
+missing values (same for building). So, I used mice independently on
+building data and then weather data.\\
+It also occured to me that I may want to use specific time metrics when
+modeling, so I deconstructed the timestamp to create five new
+predictors; hour, day of the week, numerical day, month, and year. I
+used lubridate(), a popular R function that simply accesses a timestamp
+and exploits specific pieces. Once the missing data was handled, I
+merged the data into one training and one test set that we will use for
+modeling. It's worth noting that missing values arose again after the
+final merge, so I used the same function but, rather than mean matching,
+I chose a simply random sample method as it was a small percentage of
+our overall data
+
+\hypertarget{eda}{%
+\paragraph{EDA}\label{eda}}
+
+I went with a GAM model mainly because of our relatively small amount of
+predictor variables. Even with creating five new predictors, we are
+still only left with 20 predictors. My thought was that I would be able
+to try many different combinations of predictors - all of whom may have
+different relationships with meter readings - in a relatively small
+amount of time to see what performed the best. To choose which
+predictors to use, and the parameters of each method used to transform
+the predictor, I needed to take a deeper look into the set of variables
+at hand.\\
+Off the bat, I knew three of them would not be of any real use -
+\emph{timestamp} is taken care of by the new time predictors,
+\emph{time.year} only has one value (2016), and creating four different
+meter type models renders \emph{meter\_type} useless. For the rest of
+the predictors, I always like to run a simple correlation matrix between
+the response and all of the predictors. I ran correlations of meter
+readings with building and weather data for each meter type:
+
+next were logical time metrics last were collection of weather site\_id
+taken care of through weather
+
+\#\#\#Results
+
+\#\#\#Conclusion / Future Work
+
+
+\end{document}
